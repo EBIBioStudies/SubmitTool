@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="PT2PML" basedir="." xmlns:maven="antlib:org.apache.maven.artifact.ant" >
+	<property name="build" location="build"/>
+	<property name="dist" location="dist"/>
+
+	<property name="Model" location="../BioStdCoreModel"/>
+	
+	
+	<target name="clean">
+		<delete dir="${build}"/>
+		<mkdir dir="${build}"/>
+    </target>
+
+	
+	<target name="build" depends="clean">
+		<!-- <delete dir="${dist}"/> <pom file="pom.xml"/> -->
+
+		<mkdir dir="${dist}"/>
+
+		<property name="manifest" location="MANIFEST.MF"/>
+		<property name="jarname" value="PTSubmit.jar"/>
+		
+		
+		<maven:dependencies filesetId="deps">
+		  	<maven:dependency groupId="com.lexicalscope.jewelcli" artifactId="jewelcli" version="[0.8.9,)" />
+		  	<maven:dependency groupId="uk.ac.ebi.biostd" artifactId="BioStdCoreModel" version="[0,)" >
+		  		<maven:exclusion groupId="*" artifactId="*" />
+		  	</maven:dependency>
+		</maven:dependencies>
+
+
+		<path id="master-classpath">
+			<fileset refid="deps"></fileset>
+	    </path>
+		
+		<javac  destdir="${build}" classpathref="master-classpath" source="1.8" target="1.8" debug="on" nowarn="on" includeAntRuntime="false">
+			<src path="src/main/java"/>
+			<compilerarg value="-Xlint:deprecation"/>
+		</javac>
+
+    	<unzip dest="${build}">
+    	      <fileset refid="deps" />
+        </unzip>
+		
+    <jar jarfile="${dist}/${jarname}" basedir="${build}" manifest="${manifest}" />
+		
+		
+		
+	</target>
+	
+	
+</project>
