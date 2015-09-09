@@ -34,6 +34,13 @@ public interface Config
   @Option(shortName="c", defaultValue="utf-8")
   public String getCharset();
   
+  @Option(shortName="v")
+  public boolean getValidateOnly();
+
+  @Option(shortName="m")
+  public boolean getShowMapping();
+
+  
   @Option(helpRequest = true,shortName="h")
   boolean getHelp();
   

@@ -11,12 +11,17 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
+import java.util.List;
 
+import uk.ac.ebi.biostd.in.AccessionMapping;
+import uk.ac.ebi.biostd.in.SubmissionMapping;
 import uk.ac.ebi.biostd.treelog.ConvertException;
-import uk.ac.ebi.biostd.treelog.JSON2Log;
+import uk.ac.ebi.biostd.treelog.JSON4Log;
+import uk.ac.ebi.biostd.treelog.JSON4Report;
 import uk.ac.ebi.biostd.treelog.LogNode;
 import uk.ac.ebi.biostd.treelog.LogNode.Level;
 import uk.ac.ebi.biostd.treelog.SimpleLogNode;
+import uk.ac.ebi.biostd.treelog.SubmissionReport;
 import uk.ac.ebi.biostd.treelog.Utils;
 import uk.ac.ebi.biostd.util.DataFormat;
 import uk.ac.ebi.biostd.util.FileUtil;
@@ -34,8 +39,17 @@ public class Main
  static final String authEndpoint = "auth/signin";
  static final String submitEndpoint = "submit/create";
  static final String updateEndpoint = "submit/update";
+ static final String replaceEndpoint = "submit/replace";
  static final String deleteEndpoint = "submit/delete";
 
+ enum Operation
+ {
+  CREATE,
+  UPDATE,
+  REPLACE,
+  DELETE
+ }
+ 
  public static void main(String[] args)
  {
   Config config = null;
@@ -65,17 +79,31 @@ public class Main
   
   File infile = null;
   String delAccNo = null;
-  boolean update = false;
+  Operation op = null;
   
-  if( "update".equalsIgnoreCase(config.getOperation() ) )
-   update=true;
-  else if("delete".equalsIgnoreCase(config.getOperation()) )
-   delAccNo = config.getFiles().get(0);
-  else if( ! "new".equalsIgnoreCase(config.getOperation() ) )
+  String pi = config.getOperation();
+  
+  if(pi != null)
   {
-   System.err.println("Invalid operation. Valid are: new, update or delete");
+   for( Operation o : Operation.values() )
+   {
+    if( o.name().equalsIgnoreCase(pi) )
+    {
+     op = o;
+     break;
+    }
+   }
+  }
+  
+  if( op == null )
+  {
+   System.err.println("Invalid operation. Valid are: create, update, replace or delete");
    System.exit(1);
   }
+  
+  if( op == Operation.DELETE )
+   delAccNo = config.getFiles().get(0);
+  
    
   if( delAccNo == null )
    infile = new File(config.getFiles().get(0));
@@ -166,13 +194,61 @@ public class Main
 
   String sess = login(config);
 
-  LogNode topLn = submit(infile, fmt, sess, config, update);
+  SubmissionReport report = submit(infile, fmt, sess, config, op, config.getValidateOnly());
 
+  LogNode topLn = report.getLog();
+  
+  if( config.getShowMapping() && topLn.getLevel().getPriority() <  Level.ERROR.getPriority() )
+   printMappings( report.getMappings() );
+   
   printLog(topLn, config);
 
+  System.exit( (topLn!=null && topLn.getLevel().getPriority() < Level.ERROR.getPriority())? 0 : 2 );
  }
 
  
+ private static void printMappings(List<SubmissionMapping> mappings)
+ {
+  PrintStream out = System.out;
+  
+  for( SubmissionMapping smp : mappings )
+  {
+   AccessionMapping saccm = smp.getSubmissionMapping();
+   
+   String assAcc = saccm.getAssignedAcc();
+   
+   if( assAcc == null || assAcc.length() == 0 )
+    assAcc = saccm.getOrigAcc();
+     
+   out.println("Submission "+saccm.getPosition()[0]+" : "+saccm.getOrigAcc()+" -> "+assAcc);
+   
+   for( AccessionMapping secm : smp.getSectionsMapping() )
+   {
+    out.print("  Section subm[");
+    
+    boolean first = true;
+    for( int n : secm.getPosition() )
+    {
+     if( first )
+      first=false;
+     else
+      out.print("]/sec[");
+     
+     out.print(n);
+    }
+    
+    assAcc = secm.getAssignedAcc();
+    
+    if( assAcc == null || assAcc.length() == 0 )
+     assAcc = secm.getOrigAcc();
+
+    
+    out.println("] : "+secm.getOrigAcc()+" -> "+assAcc);
+   }
+  }
+ }
+
+
  private static LogNode delete(String delAccNo, String sess, Config config)
  {
   String appUrl = config.getServer();
@@ -205,7 +281,7 @@ public class Main
 
    try
    {
-    return JSON2Log.convert(resp);
+    return JSON4Log.convert(resp);
    }
    catch(ConvertException e)
    {
@@ -225,18 +301,27 @@ public class Main
  }
 
 
- private static LogNode submit(File infile, DataFormat fmt, String sess, Config config, boolean update)
+ private static SubmissionReport submit(File infile, DataFormat fmt, String sess, Config config, Operation op, boolean validateOnly)
  {
   String appUrl = config.getServer();
 
   if(!appUrl.endsWith("/"))
    appUrl = appUrl + "/";
+
+  
+  if( op == Operation.CREATE )
+   appUrl += submitEndpoint;
+  else if( op == Operation.UPDATE )
+   appUrl += updateEndpoint;
+  else if( op == Operation.REPLACE )
+   appUrl += replaceEndpoint;
   
   URL loginURL = null;
 
+  
   try
   {
-   loginURL = new URL(appUrl + (update? updateEndpoint : submitEndpoint) + "?"+SessionKey+"="+URLEncoder.encode(sess, "utf-8"));
+   loginURL = new URL(appUrl  + "?"+SessionKey+"="+URLEncoder.encode(sess, "utf-8")+(validateOnly?"&validateOnly=true":""));
   }
   catch(MalformedURLException e)
   {
@@ -296,9 +381,12 @@ public class Main
 
    conn.disconnect();
 
+   System.out.println(resp);
+   
+   
    try
    {
-    return JSON2Log.convert(resp);
+    return JSON4Report.convert(resp);
    }
    catch(ConvertException e)
    {
@@ -443,17 +531,17 @@ public class Main
 
  static void usage()
  {
-  System.err.println("Usage: java -jar PTSubmit -o new|update|delete -s serverURL -u user -p [password] [-h] [-i in fmt] [-c charset] [-d] [-l logfile] <input file|AccNo>");
+  System.err.println("Usage: java -jar PTSubmit -o create|update|replace|delete -s serverURL -u user -p [password] [-h] [-i in fmt] [-c charset] [-d] [-l logfile] <input file|AccNo>");
   System.err.println("-h or --help print this help message");
   System.err.println("-i or --inputFormat input file format. Can be json,tsv,csv,xls,xlsx,ods. Default is auto (by file extension)");
   System.err.println("-c or --charset file charset (for text files only)");
   System.err.println("-s or --server server endpoint URL");
   System.err.println("-u or --user user login");
   System.err.println("-p or --password user password");
-  System.err.println("-o or --operation requested operation. Can be new, update or delete");
+  System.err.println("-o or --operation requested operation. Can be create, update, replace or delete");
   System.err.println("-d or --printInfoNodes print info messages along with errors and warnings");
   System.err.println("-l or --logFile defines log file. By default stdout");
-  System.err.println("<input file> PagaTab input file. Supported UCS-2 (UTF-16), UTF-8 CSV or TSV or MS Excel XML files");
-  System.err.println("<output file> XML output file. '-' means output to stdout");
+  System.err.println("-v or --verifyOnly simulate submission on the server side without actual database changing");
+  System.err.println("<input file> PagaTab input file. Supported UCS-2 (UTF-16), UTF-8 CSV or TSV, XLS, XLSX, ODS, JSON (Or accession number for delete operation)");
  }
 }

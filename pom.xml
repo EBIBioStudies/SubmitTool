@@ -26,12 +26,12 @@
   	  <groupId>uk.ac.ebi.biostd</groupId>
       <artifactId>BioStdCoreModel</artifactId>
       <version>0.0.3-SNAPSHOT</version>
-      <exclusions>
+      <!--  exclusions>
        <exclusion>
         <groupId>*</groupId>
         <artifactId>*</artifactId>
        </exclusion>
-      </exclusions>
+      </exclusions -->
    	</dependency>
   	
   	
