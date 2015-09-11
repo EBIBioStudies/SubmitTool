@@ -2,6 +2,7 @@ package uk.ac.ebi.biostd.tools.submit;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOError;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
@@ -161,45 +162,14 @@ public class Main
    }
   }
   
-
-  String text = null;
-
-  try
-  {
-   if( "auto".equalsIgnoreCase(config.getCharset()) )
-    text = FileUtil.readUnicodeFile(infile);
-   else
-   {
-    Charset cs = null;
-    
-    try
-    {
-     cs = Charset.forName(config.getCharset());
-    }
-    catch( Throwable t )
-    {
-     System.err.println("Invalid charset: "+config.getCharset());
-     System.exit(1);
-    }
-    
-    text = FileUtil.readFile(infile,cs);
-   }
-  }
-  catch(IOException e)
-  {
-   System.err.println("Input file read ERROR: " + e.getMessage());
-   System.exit(1);
-  }
-
-
   String sess = login(config);
 
   SubmissionReport report = submit(infile, fmt, sess, config, op, config.getValidateOnly());
 
   LogNode topLn = report.getLog();
   
-  if( config.getShowMapping() && topLn.getLevel().getPriority() <  Level.ERROR.getPriority() )
-   printMappings( report.getMappings() );
+  if( config.getMappingFile()!=null && topLn.getLevel().getPriority() <  Level.ERROR.getPriority() )
+   printMappings( report.getMappings() , config );
    
   printLog(topLn, config);
 
@@ -207,45 +177,79 @@ public class Main
  }
 
  
- private static void printMappings(List<SubmissionMapping> mappings)
+ private static void printMappings(List<SubmissionMapping> mappings, Config config)
  {
   PrintStream out = System.out;
+
+
+  if( config.getMappingFile().size() > 0 )
+  {
+   File lf = new File(config.getMappingFile().get(0));
+
+   if(lf.exists() && !lf.canWrite())
+   {
+    System.err.println("Mapping file '" + config.getMappingFile() + "' is not writable");
+    System.exit(1);
+   }
+
+   try
+   {
+    out = new PrintStream(lf, "UTF-8");
+   }
+   catch(FileNotFoundException e)
+   {
+    System.err.println("Can't open mapping file '" + config.getMappingFile() + "'");
+    System.exit(1);
+   }
+   catch(UnsupportedEncodingException e)
+   {
+    System.err.println("UTF-8 encoding is not supported");
+    System.exit(1);
+   }
+
+  }
   
-  for( SubmissionMapping smp : mappings )
+  for(SubmissionMapping smp : mappings)
   {
    AccessionMapping saccm = smp.getSubmissionMapping();
-   
-   String assAcc = saccm.getAssignedAcc();
-   
-   if( assAcc == null || assAcc.length() == 0 )
-    assAcc = saccm.getOrigAcc();
-     
-   out.println("Submission "+saccm.getPosition()[0]+" : "+saccm.getOrigAcc()+" -> "+assAcc);
-   
-   for( AccessionMapping secm : smp.getSectionsMapping() )
-   {
-    out.print("  Section subm[");
-    
-    boolean first = true;
-    for( int n : secm.getPosition() )
-    {
-     if( first )
-      first=false;
-     else
-      out.print("]/sec[");
-     
-     out.print(n);
-    }
-    
-    assAcc = secm.getAssignedAcc();
-    
-    if( assAcc == null || assAcc.length() == 0 )
-     assAcc = secm.getOrigAcc();
 
-    
-    out.println("] : "+secm.getOrigAcc()+" -> "+assAcc);
+   String assAcc = saccm.getAssignedAcc();
+
+   if(assAcc == null || assAcc.length() == 0)
+    assAcc = saccm.getOrigAcc();
+
+   out.println("Submission " + saccm.getPosition()[0] + " : " + saccm.getOrigAcc() + " -> " + assAcc);
+
+   if(smp.getSectionsMapping() != null)
+   {
+    for(AccessionMapping secm : smp.getSectionsMapping())
+    {
+     out.print("  Section subm[");
+
+     boolean first = true;
+     for(int n : secm.getPosition())
+     {
+      if(first)
+       first = false;
+      else
+       out.print("]/sec[");
+
+      out.print(n);
+     }
+
+     assAcc = secm.getAssignedAcc();
+
+     if(assAcc == null || assAcc.length() == 0)
+      assAcc = secm.getOrigAcc();
+
+     out.println("] : " + secm.getOrigAcc() + " -> " + assAcc);
+    }
    }
   }
+  
+  if(out != System.out)
+   out.close();
+
  }
 
 
@@ -343,22 +347,38 @@ public class Main
    if( fmt == DataFormat.json || fmt == DataFormat.csv || fmt == DataFormat.tsv || fmt == DataFormat.csvtsv )
    {
     conn.setRequestProperty("Content-Type", fmt.getContentType()+"; charset=utf-8");
-   
-    Charset cs = null;
+  
+    String text = null;
     
     try
     {
-     cs = Charset.forName(config.getCharset());
+     if( "auto".equalsIgnoreCase(config.getCharset()) )
+      text = FileUtil.readUnicodeFile(infile);
+     else
+     {
+      Charset cs = null;
+      
+      try
+      {
+       cs = Charset.forName(config.getCharset());
+      }
+      catch( Throwable t )
+      {
+       System.err.println("Invalid charset: "+config.getCharset());
+       System.exit(1);
+      }
+      
+      text = FileUtil.readFile(infile,cs);
+     }
     }
-    catch( Throwable t )
+    catch(IOException e)
     {
-     System.err.println("Invalid charset: "+config.getCharset());
+     System.err.println("Input file read ERROR: " + e.getMessage());
      System.exit(1);
     }
+
     
-    String txt = FileUtil.readFile(infile, cs);
-    
-    byte[] postData   = txt.getBytes( Charset.forName( "UTF-8" ));
+    byte[] postData   = text.getBytes( Charset.forName( "UTF-8" ));
     
     conn.setRequestProperty("Content-Length", String.valueOf(postData.length));
     conn.getOutputStream().write( postData );
@@ -381,8 +401,6 @@ public class Main
 
    conn.disconnect();
 
-   System.out.println(resp);
-   
    
    try
    {
@@ -415,10 +433,31 @@ public class Main
   
   URL loginURL = null;
 
+  String password = "";
+  
+  if( config.getPassword() != null )
+  {
+   if( config.getPassword().size() > 0 )
+    password=config.getPassword().get(0);
+   else
+   {
+    try
+    {
+     password = new String( System.console().readPassword("Password for %s: ",config.getUser()) );
+    }
+    catch(IOError e)
+    {
+     System.err.println("Can't read password from input stream: "+e.getMessage());
+     System.exit(1);
+    }
+   }
+  }
+  
+  
   try
   {
    loginURL = new URL(appUrl + authEndpoint + "?login=" + URLEncoder.encode(config.getUser(), "utf-8") + "&password="
-     + URLEncoder.encode(config.getPassword(), "utf-8"));
+     + URLEncoder.encode(password, "utf-8"));
   }
   catch(MalformedURLException e)
   {
@@ -531,7 +570,7 @@ public class Main
 
  static void usage()
  {
-  System.err.println("Usage: java -jar PTSubmit -o create|update|replace|delete -s serverURL -u user -p [password] [-h] [-i in fmt] [-c charset] [-d] [-l logfile] <input file|AccNo>");
+  System.err.println("Usage: java -jar PTSubmit -o create|update|replace|delete -s serverURL -u user -p [password] [-h] [-i in fmt] [-c charset] [-d] [-l logfile] [-m [mpFile]] <input file|AccNo>");
   System.err.println("-h or --help print this help message");
   System.err.println("-i or --inputFormat input file format. Can be json,tsv,csv,xls,xlsx,ods. Default is auto (by file extension)");
   System.err.println("-c or --charset file charset (for text files only)");
@@ -541,6 +580,7 @@ public class Main
   System.err.println("-o or --operation requested operation. Can be create, update, replace or delete");
   System.err.println("-d or --printInfoNodes print info messages along with errors and warnings");
   System.err.println("-l or --logFile defines log file. By default stdout");
+  System.err.println("-m or --mappingFile print mapping file. By default print to stdout");
   System.err.println("-v or --verifyOnly simulate submission on the server side without actual database changing");
   System.err.println("<input file> PagaTab input file. Supported UCS-2 (UTF-16), UTF-8 CSV or TSV, XLS, XLSX, ODS, JSON (Or accession number for delete operation)");
  }

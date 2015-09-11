@@ -16,8 +16,9 @@ public interface Config
   @Option( shortName="u")
   String getUser();
 
-  @Option( shortName="p")
-  String getPassword();
+  @Option( shortName="p",maximum=1)
+  public List<String> getPassword();
+  public boolean isPassword();
   
   @Option(shortName="s")
   public String getServer();
@@ -37,9 +38,9 @@ public interface Config
   @Option(shortName="v")
   public boolean getValidateOnly();
 
-  @Option(shortName="m")
-  public boolean getShowMapping();
-
+  @Option(shortName="m",maximum=1)
+  public List<String> getMappingFile();
+  public boolean isMappingFile();
   
   @Option(helpRequest = true,shortName="h")
   boolean getHelp();
