@@ -561,7 +561,14 @@ public class Main
 
    }
 
-   Utils.printLog(topLn, out, config.getPrintInfoNodes()? Level.DEBUG : Level.WARN );
+   try
+   {
+    Utils.printLog(topLn, out, config.getPrintInfoNodes()? Level.DEBUG : Level.WARN );
+   }
+   catch(IOException e)
+   {
+    e.printStackTrace();
+   }
 
    if(out != System.err)
     out.close();
