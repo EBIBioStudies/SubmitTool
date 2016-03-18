@@ -42,13 +42,16 @@ public class Main
  static final String updateEndpoint = "submit/update";
  static final String replaceEndpoint = "submit/replace";
  static final String deleteEndpoint = "submit/delete";
+ static final String tranklucateEndpoint = "submit/tranklucate";
 
  enum Operation
  {
   CREATE,
   UPDATE,
   REPLACE,
-  DELETE
+  DELETE,
+  TRANKLUCATE,
+  TRANKLUCATE_BY_PATTERN
  }
  
  public static void main(String[] args)
@@ -98,23 +101,34 @@ public class Main
   
   if( op == null )
   {
-   System.err.println("Invalid operation. Valid are: create, update, replace or delete");
+   System.err.println("Invalid operation. Valid are: create, update, replace or delete (tranklucate, tranklucate_by_pattern)");
    System.exit(1);
   }
   
-  if( op == Operation.DELETE )
-   delAccNo = config.getFiles().get(0);
   
-   
-  if( delAccNo == null )
-   infile = new File(config.getFiles().get(0));
-  else
+  if( op == Operation.DELETE )
   {
    String sess = login(config);
-   LogNode topLn = delete(delAccNo, sess, config);
+   LogNode topLn = genDelete(config.getFiles().get(0), deleteEndpoint, "id", sess, config);
    printLog(topLn, config);
-   return;
+   return; 
   }
+  else if( op == Operation.TRANKLUCATE )
+  {
+   String sess = login(config);
+   LogNode topLn = genDelete(config.getFiles().get(0), tranklucateEndpoint, "accno", sess, config);
+   printLog(topLn, config);
+   return; 
+  }
+  else if( op == Operation.TRANKLUCATE_BY_PATTERN )
+  {
+   String sess = login(config);
+   LogNode topLn = genDelete(config.getFiles().get(0), tranklucateEndpoint, "accnoPattern", sess, config);
+   printLog(topLn, config);
+   return; 
+  }
+  else
+   infile = new File(config.getFiles().get(0));
 
   if(!infile.canRead())
   {
@@ -253,7 +267,7 @@ public class Main
  }
 
 
- private static LogNode delete(String delAccNo, String sess, Config config)
+ private static LogNode genDelete(String delAccNo, String epoint, String param, String sess, Config config)
  {
   String appUrl = config.getServer();
 
@@ -264,7 +278,7 @@ public class Main
 
   try
   {
-   loginURL = new URL(appUrl + deleteEndpoint + "?id="+delAccNo+"&"+SessionKey+"="+URLEncoder.encode(sess, "utf-8"));
+   loginURL = new URL(appUrl + epoint + "?"+param+"="+URLEncoder.encode(delAccNo, "utf-8")+"&"+SessionKey+"="+URLEncoder.encode(sess, "utf-8"));
   }
   catch(MalformedURLException e)
   {
