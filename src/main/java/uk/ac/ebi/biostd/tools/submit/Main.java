@@ -42,6 +42,7 @@ public class Main
  static final String updateEndpoint = "submit/update";
  static final String replaceEndpoint = "submit/replace";
  static final String deleteEndpoint = "submit/delete";
+ static final String overrideEndpoint = "submit/override";
  static final String tranklucateEndpoint = "submit/tranklucate";
 
  enum Operation
@@ -49,6 +50,7 @@ public class Main
   CREATE,
   UPDATE,
   REPLACE,
+  OVERRIDE,
   DELETE,
   TRANKLUCATE,
   TRANKLUCATE_BY_PATTERN
@@ -333,6 +335,8 @@ public class Main
    appUrl += updateEndpoint;
   else if( op == Operation.REPLACE )
    appUrl += replaceEndpoint;
+  else if( op == Operation.OVERRIDE )
+   appUrl += overrideEndpoint;
   
   URL loginURL = null;
 
