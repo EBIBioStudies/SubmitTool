@@ -38,22 +38,26 @@ public class Main
  static final String SessionKey = "BIOSTDSESS";
  
  static final String authEndpoint = "auth/signin";
- static final String submitEndpoint = "submit/create";
- static final String updateEndpoint = "submit/update";
- static final String replaceEndpoint = "submit/replace";
- static final String deleteEndpoint = "submit/delete";
- static final String overrideEndpoint = "submit/override";
- static final String tranklucateEndpoint = "submit/tranklucate";
+ 
+ static final String endpointPfx = "submit/";
+ 
+// static final String submitEndpoint = "submit/create";
+// static final String updateEndpoint = "submit/update";
+// static final String replaceEndpoint = "submit/replace";
+// static final String deleteEndpoint = "submit/delete";
+// static final String overrideEndpoint = "submit/override";
+// static final String tranklucateEndpoint = "submit/tranklucate";
 
  enum Operation
  {
-  CREATE,
-  UPDATE,
-  REPLACE,
-  OVERRIDE,
-  DELETE,
-  TRANKLUCATE,
-  TRANKLUCATE_BY_PATTERN
+  create,
+  createupdate,
+  update,
+  override,
+  createoverride,
+  delete,
+  tranklucate,
+  tranklucate_by_pattern
  }
  
  public static void main(String[] args)
@@ -108,24 +112,24 @@ public class Main
   }
   
   
-  if( op == Operation.DELETE )
+  if( op == Operation.delete )
   {
    String sess = login(config);
-   LogNode topLn = genDelete(config.getFiles().get(0), deleteEndpoint, "id", sess, config);
+   LogNode topLn = genDelete(config.getFiles().get(0), endpointPfx+op.name(), "id", sess, config);
    printLog(topLn, config);
    return; 
   }
-  else if( op == Operation.TRANKLUCATE )
+  else if( op == Operation.tranklucate )
   {
    String sess = login(config);
-   LogNode topLn = genDelete(config.getFiles().get(0), tranklucateEndpoint, "accno", sess, config);
+   LogNode topLn = genDelete(config.getFiles().get(0), endpointPfx+op.name(), "accno", sess, config);
    printLog(topLn, config);
    return; 
   }
-  else if( op == Operation.TRANKLUCATE_BY_PATTERN )
+  else if( op == Operation.tranklucate_by_pattern )
   {
    String sess = login(config);
-   LogNode topLn = genDelete(config.getFiles().get(0), tranklucateEndpoint, "accnoPattern", sess, config);
+   LogNode topLn = genDelete(config.getFiles().get(0), endpointPfx+Operation.tranklucate.name(), "accnoPattern", sess, config);
    printLog(topLn, config);
    return; 
   }
@@ -180,7 +184,7 @@ public class Main
   
   String sess = login(config);
 
-  SubmissionReport report = submit(infile, fmt, sess, config, op, config.getValidateOnly());
+  SubmissionReport report = submit(infile, fmt, sess, config, op, config.getValidateOnly(), config.getIgnoreAbsentFiles());
 
   LogNode topLn = report.getLog();
   
@@ -321,29 +325,22 @@ public class Main
  }
 
 
- private static SubmissionReport submit(File infile, DataFormat fmt, String sess, Config config, Operation op, boolean validateOnly)
+ private static SubmissionReport submit(File infile, DataFormat fmt, String sess, Config config, Operation op, boolean validateOnly, boolean ignAbsFiles)
  {
   String appUrl = config.getServer();
 
   if(!appUrl.endsWith("/"))
    appUrl = appUrl + "/";
 
+  appUrl +=  endpointPfx+op.name();
   
-  if( op == Operation.CREATE )
-   appUrl += submitEndpoint;
-  else if( op == Operation.UPDATE )
-   appUrl += updateEndpoint;
-  else if( op == Operation.REPLACE )
-   appUrl += replaceEndpoint;
-  else if( op == Operation.OVERRIDE )
-   appUrl += overrideEndpoint;
   
   URL loginURL = null;
 
   
   try
   {
-   loginURL = new URL(appUrl  + "?"+SessionKey+"="+URLEncoder.encode(sess, "utf-8")+(validateOnly?"&validateOnly=true":""));
+   loginURL = new URL(appUrl  + "?"+SessionKey+"="+URLEncoder.encode(sess, "utf-8")+(validateOnly?"&validateOnly=true":"")+(ignAbsFiles?"&ignoreAbsentFiles=true":""));
   }
   catch(MalformedURLException e)
   {
@@ -595,18 +592,20 @@ public class Main
 
  static void usage()
  {
-  System.err.println("Usage: java -jar PTSubmit -o create|update|replace|delete -s serverURL -u user -p [password] [-h] [-i in fmt] [-c charset] [-d] [-l logfile] [-m [mpFile]] <input file|AccNo>");
+  System.err.println("Usage: java -jar PTSubmit -o <operation> -s serverURL -u user -p [password] [-h] [-i in fmt] [-c charset] [-d] [-l logfile] [-m [mpFile]] <input file|AccNo>");
   System.err.println("-h or --help print this help message");
   System.err.println("-i or --inputFormat input file format. Can be json,tsv,csv,xls,xlsx,ods. Default is auto (by file extension)");
   System.err.println("-c or --charset file charset (for text files only)");
   System.err.println("-s or --server server endpoint URL");
   System.err.println("-u or --user user login");
   System.err.println("-p or --password user password");
-  System.err.println("-o or --operation requested operation. Can be create, update, replace or delete");
+  System.err.println("-o or --operation requested operation. Can be: create, createupdate, update, override, createoverride, delete, tranklucate, tranklucate_by_pattern");
   System.err.println("-d or --printInfoNodes print info messages along with errors and warnings");
   System.err.println("-l or --logFile defines log file. By default stdout");
   System.err.println("-m or --mappingFile print mapping file. By default print to stdout");
   System.err.println("-v or --verifyOnly simulate submission on the server side without actual database changing");
+  System.err.println("--ignoreAbsentFiles ignore absent files. Only for testing purposes!");
   System.err.println("<input file> PagaTab input file. Supported UCS-2 (UTF-16), UTF-8 CSV or TSV, XLS, XLSX, ODS, JSON (Or accession number for delete operation)");
+  
  }
 }

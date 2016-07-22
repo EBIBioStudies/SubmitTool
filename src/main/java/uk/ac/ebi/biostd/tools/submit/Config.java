@@ -38,6 +38,9 @@ public interface Config
   @Option(shortName="v")
   public boolean getValidateOnly();
 
+  @Option
+  public boolean getIgnoreAbsentFiles();
+
   @Option(shortName="m",maximum=1)
   public List<String> getMappingFile();
   public boolean isMappingFile();
