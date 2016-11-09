@@ -12,6 +12,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 import java.util.List;
 
 import uk.ac.ebi.biostd.in.AccessionMapping;
@@ -56,6 +57,7 @@ public class Main
   override,
   createoverride,
   delete,
+  remove,
   tranklucate,
   tranklucate_by_pattern
  }
@@ -107,12 +109,12 @@ public class Main
   
   if( op == null )
   {
-   System.err.println("Invalid operation. Valid are: create, update, replace or delete (tranklucate, tranklucate_by_pattern)");
+   System.err.println("Invalid operation. Valid are: "+Arrays.asList(Operation.values()));
    System.exit(1);
   }
   
   
-  if( op == Operation.delete )
+  if( op == Operation.delete || op == Operation.remove )
   {
    String sess = login(config);
    LogNode topLn = genDelete(config.getFiles().get(0), endpointPfx+op.name(), "id", sess, config);
@@ -184,7 +186,15 @@ public class Main
   
   String sess = login(config);
 
-  SubmissionReport report = submit(infile, fmt, sess, config, op, config.getValidateOnly(), config.getIgnoreAbsentFiles());
+  String obUser = null;
+  
+  if( config.getOnBehalf() != null && config.getOnBehalf().size() > 0 )
+   obUser = config.getOnBehalf().get(0);
+   
+  SubmissionReport report = submit(infile, fmt, sess, config, op, 
+    config.getValidateOnly(), 
+    config.getIgnoreAbsentFiles(), 
+    obUser);
 
   LogNode topLn = report.getLog();
   
@@ -325,35 +335,56 @@ public class Main
  }
 
 
- private static SubmissionReport submit(File infile, DataFormat fmt, String sess, Config config, Operation op, boolean validateOnly, boolean ignAbsFiles)
+ private static SubmissionReport submit(File infile, DataFormat fmt, String sess, Config config, Operation op, boolean validateOnly, boolean ignAbsFiles, String onBeh)
  {
+  StringBuilder urlsb = new StringBuilder();
+
   String appUrl = config.getServer();
+  
+  urlsb.append(appUrl);
 
   if(!appUrl.endsWith("/"))
-   appUrl = appUrl + "/";
+   urlsb.append("/");
 
-  appUrl +=  endpointPfx+op.name();
+  urlsb.append(endpointPfx).append(op.name());
   
+  try
+  {
+   urlsb.append("?").append(SessionKey).append("=").append(URLEncoder.encode(sess, "utf-8"));
+
+   if( onBeh != null )
+    urlsb.append("&onBehalf=").append(URLEncoder.encode(onBeh, "utf-8"));
+  }
+  catch(UnsupportedEncodingException e1)
+  {
+  }
+  
+  if( validateOnly )
+   urlsb.append("&validateOnly=true");
+  
+  if( ignAbsFiles )
+   urlsb.append("&ignoreAbsentFiles=true");
+ 
   
   URL loginURL = null;
 
   
+  
   try
   {
-   loginURL = new URL(appUrl  + "?"+SessionKey+"="+URLEncoder.encode(sess, "utf-8")+(validateOnly?"&validateOnly=true":"")+(ignAbsFiles?"&ignoreAbsentFiles=true":""));
+   loginURL = new URL(urlsb.toString());
   }
   catch(MalformedURLException e)
   {
    System.err.println("Invalid server URL: " + config.getServer());
    System.exit(1);
   }
-  catch(UnsupportedEncodingException e)
-  {
-  }
 
+  HttpURLConnection conn = null;
+  
   try
   {
-   HttpURLConnection conn = (HttpURLConnection) loginURL.openConnection();
+   conn = (HttpURLConnection) loginURL.openConnection();
    
    
    conn.setDoOutput(true);
@@ -411,7 +442,6 @@ public class Main
     conn.getOutputStream().close();
    }
 
-   
    String resp = StringUtils.readFully((InputStream)conn.getContent(), Charset.forName("utf-8"));
 
    conn.disconnect();
@@ -431,6 +461,23 @@ public class Main
   }
   catch(IOException e)
   {
+   if( conn != null )
+   {
+    try
+    {
+     String resp = StringUtils.readFully(conn.getErrorStream(), Charset.forName("utf-8"));
+     
+     if( resp.startsWith("FAIL ") )
+     {
+      System.err.println("ERROR: "+resp.substring(5));
+      System.exit(1);
+     }
+    }
+    catch(Exception e2)
+    {
+    }
+   }
+   
    System.err.println("Connection to server '"+config.getServer()+"' failed: "+e.getMessage());
    System.exit(1);
   }
@@ -599,6 +646,7 @@ public class Main
   System.err.println("-s or --server server endpoint URL");
   System.err.println("-u or --user user login");
   System.err.println("-p or --password user password");
+  System.err.println("-b or --onBehalf <user> request operation on behalf of other user");
   System.err.println("-o or --operation requested operation. Can be: create, createupdate, update, override, createoverride, delete, tranklucate, tranklucate_by_pattern");
   System.err.println("-d or --printInfoNodes print info messages along with errors and warnings");
   System.err.println("-l or --logFile defines log file. By default stdout");

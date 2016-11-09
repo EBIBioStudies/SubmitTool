@@ -37,6 +37,10 @@ public interface Config
   
   @Option(shortName="v")
   public boolean getValidateOnly();
+  
+  @Option(shortName="b",maximum=1)
+  public List<String> getOnBehalf();
+  public boolean isOnBehalf();
 
   @Option
   public boolean getIgnoreAbsentFiles();
