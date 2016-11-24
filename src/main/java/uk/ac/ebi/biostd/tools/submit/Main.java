@@ -36,6 +36,21 @@ import com.lexicalscope.jewel.cli.InvalidOptionSpecificationException;
 
 public class Main
 {
+ public static class Prm
+ {
+  public Prm()
+  {
+  }
+  
+  public Prm(String n, String v )
+  {
+   name=n; value=v;
+  }
+
+  public String name;
+  public String value;
+ }
+ 
  static final String SessionKey = "BIOSTDSESS";
  
  static final String authEndpoint = "auth/signin";
@@ -59,7 +74,9 @@ public class Main
   delete,
   remove,
   tranklucate,
-  tranklucate_by_pattern
+  tranklucate_by_pattern,
+  chown,
+  chown_by_pattern
  }
  
  public static void main(String[] args)
@@ -82,7 +99,7 @@ public class Main
    System.exit(1);
   }
 
-  if(config.getFiles() == null || config.getFiles().size() != 1)
+  if(config.getFiles() == null || config.getFiles().size() < 1 || config.getFiles().size() > 2 )
   {
    System.err.println("Command line processing ERROR: invalid number of files specified");
    usage();
@@ -90,7 +107,6 @@ public class Main
   }
   
   File infile = null;
-  String delAccNo = null;
   Operation op = null;
   
   String pi = config.getOperation();
@@ -113,28 +129,43 @@ public class Main
    System.exit(1);
   }
   
+  String endPoint=null;
+  Prm[] params = null;
+  
   
   if( op == Operation.delete || op == Operation.remove )
   {
-   String sess = login(config);
-   LogNode topLn = genDelete(config.getFiles().get(0), endpointPfx+op.name(), "id", sess, config);
-   printLog(topLn, config);
-   return; 
+   clParams(config,1);
+   endPoint = endpointPfx+op.name();
+   params = new Prm[]{ new Prm("id",config.getFiles().get(0)) };
   }
   else if( op == Operation.tranklucate )
   {
-   String sess = login(config);
-   LogNode topLn = genDelete(config.getFiles().get(0), endpointPfx+op.name(), "accno", sess, config);
-   printLog(topLn, config);
-   return; 
+   clParams(config,1);
+   endPoint = endpointPfx+op.name();
+   params = new Prm[]{ new Prm("accno",config.getFiles().get(0)) };
   }
   else if( op == Operation.tranklucate_by_pattern )
   {
+   clParams(config,1);
+   endPoint = endpointPfx+Operation.tranklucate.name();
+   params = new Prm[]{ new Prm("accnoPattern",config.getFiles().get(0)) };
+  }
+  else if( op == Operation.chown || op == Operation.chown_by_pattern  )
+  {
+   clParams(config,2);
+   endPoint = endpointPfx+Operation.chown.name();
+   params = new Prm[]{ new Prm("owner",config.getFiles().get(0)), new Prm(op == Operation.chown?"accno":"accnoPattern",config.getFiles().get(1)) };
+  }
+  
+  
+  if( endPoint != null )
+  {
    String sess = login(config);
-   LogNode topLn = genDelete(config.getFiles().get(0), endpointPfx+Operation.tranklucate.name(), "accnoPattern", sess, config);
+   LogNode topLn = genReq(endPoint, params, sess, config);
    printLog(topLn, config);
    return; 
-  }
+  } 
   else
    infile = new File(config.getFiles().get(0));
 
@@ -206,6 +237,15 @@ public class Main
   System.exit( (topLn!=null && topLn.getLevel().getPriority() < Level.ERROR.getPriority())? 0 : 2 );
  }
 
+ 
+ private static void clParams( Config cfg, int n )
+ {
+  if( cfg.getFiles().size() != n )
+  {
+   System.err.println("Invalid number of parameters: "+n+" expected");
+   System.exit(1);
+  }
+ } 
  
  private static void printMappings(List<SubmissionMapping> mappings, Config config)
  {
@@ -282,6 +322,67 @@ public class Main
 
  }
 
+ 
+ private static LogNode genReq(String epoint, Prm[] prms, String sess, Config config)
+ {
+  StringBuilder sb = new StringBuilder();
+  
+  sb.append(config.getServer());
+  
+  if(sb.charAt(sb.length()-1) != '/' )
+   sb.append('/');
+  
+
+  URL loginURL = null;
+
+  try
+  {
+   sb.append(epoint).append('?').append(SessionKey).append('=').append(URLEncoder.encode(sess, "utf-8"));
+   
+   for( Prm pr : prms )
+    sb.append('&').append(pr.name).append('=').append(URLEncoder.encode(pr.value, "utf-8"));
+   
+
+   loginURL = new URL(sb.toString());
+  }
+  catch(MalformedURLException e)
+  {
+   System.err.println("Invalid server URL: " + config.getServer());
+   System.exit(1);
+  }
+  catch(UnsupportedEncodingException e)
+  {
+  }
+
+  try
+  {
+   HttpURLConnection conn = (HttpURLConnection) loginURL.openConnection();
+   
+   String resp = StringUtils.readFully((InputStream)conn.getContent(), Charset.forName("utf-8"));
+
+   conn.disconnect();
+
+   try
+   {
+    return JSON4Log.convert(resp);
+   }
+   catch(ConvertException e)
+   {
+    System.err.println("Invalid server response. JSON log expected");
+    System.exit(1);
+   }
+   
+   
+  }
+  catch(IOException e)
+  {
+   System.err.println("Connection to server '"+config.getServer()+"' failed: "+e.getMessage());
+   System.exit(1);
+  }
+  
+  return null;
+ }
+ 
 
  private static LogNode genDelete(String delAccNo, String epoint, String param, String sess, Config config)
  {
@@ -533,6 +634,13 @@ public class Main
   try
   {
    HttpURLConnection conn = (HttpURLConnection) loginURL.openConnection();
+   
+   if( conn.getResponseCode() == HttpURLConnection.HTTP_FORBIDDEN )
+   {
+    System.err.println("Auth failed: invalid user/password");
+    System.exit(1);
+   }
+   
    String resp = StringUtils.readFully((InputStream)conn.getContent(), Charset.forName("utf-8"));
 
    conn.disconnect();
