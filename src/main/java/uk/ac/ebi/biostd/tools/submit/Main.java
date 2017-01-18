@@ -155,7 +155,7 @@ public class Main
   {
    clParams(config,2);
    endPoint = endpointPfx+Operation.chown.name();
-   params = new Prm[]{ new Prm("owner",config.getFiles().get(0)), new Prm(op == Operation.chown?"accno":"accnoPattern",config.getFiles().get(1)) };
+   params = new Prm[]{ new Prm("owner",config.getFiles().get(1)), new Prm(op == Operation.chown?"accno":"accnoPattern",config.getFiles().get(0)) };
   }
   
   
@@ -747,7 +747,7 @@ public class Main
 
  static void usage()
  {
-  System.err.println("Usage: java -jar PTSubmit -o <operation> -s serverURL -u user -p [password] [-h] [-i in fmt] [-c charset] [-d] [-l logfile] [-m [mpFile]] <input file|AccNo>");
+  System.err.println("Usage: java -jar PTSubmit -o <operation> -s serverURL -u user -p [password] [-h] [-i in fmt] [-c charset] [-d] [-l logfile] [-m [mpFile]] <input file|AccNo> [owner]");
   System.err.println("-h or --help print this help message");
   System.err.println("-i or --inputFormat input file format. Can be json,tsv,csv,xls,xlsx,ods. Default is auto (by file extension)");
   System.err.println("-c or --charset file charset (for text files only)");
@@ -755,13 +755,14 @@ public class Main
   System.err.println("-u or --user user login");
   System.err.println("-p or --password user password");
   System.err.println("-b or --onBehalf <user> request operation on behalf of other user");
-  System.err.println("-o or --operation requested operation. Can be: create, createupdate, update, override, createoverride, delete, tranklucate, tranklucate_by_pattern");
+  System.err.println("-o or --operation requested operation. Can be: create, createupdate, update, override, createoverride, delete, remove, tranklucate, tranklucate_by_pattern,chown,chown_by_pattern");
   System.err.println("-d or --printInfoNodes print info messages along with errors and warnings");
   System.err.println("-l or --logFile defines log file. By default stdout");
   System.err.println("-m or --mappingFile print mapping file. By default print to stdout");
   System.err.println("-v or --verifyOnly simulate submission on the server side without actual database changing");
   System.err.println("--ignoreAbsentFiles ignore absent files. Only for testing purposes!");
   System.err.println("<input file> PagaTab input file. Supported UCS-2 (UTF-16), UTF-8 CSV or TSV, XLS, XLSX, ODS, JSON (Or accession number for delete operation)");
+  System.err.println("[owner] new owner for chown and chown_by_pattern operations");
   
  }
 }
